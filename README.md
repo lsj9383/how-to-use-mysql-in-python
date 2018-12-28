@@ -1,12 +1,14 @@
 # How to Use MySQL in Python
 记录本人在python中使用MySQL所遇到过的问题，问题主要又分为三大部分：
-* DataBase API
-* Connection Pool
-* MySQL
+* DataBase API, 讨论Python数据库API
+* Connection Pool, 讨论连接池使用中遇到的问题.
+* MySQL, 讨论MySQL本身所带来的问题.
 
 ## 一、DataBase API
 对于Python的数据库驱动API，首先需要关注和熟悉PEP(Python Enhancement Proposals)的建议，其中大部分常用的的Python-MySQL-API都会遵循[PEP249](https://legacy.python.org/dev/peps/pep-0249/)的建议，常见的数据库连接池也认为连接对象符合PEP249的规定。
 ### 1.*构造函数*
+
+### 2.*连接的事务*
 
 ## 二、Connection Pool
 在后台程序中通常不会直接使用数据库连接，而是使用数据库连接池(pool)，线程从pool中获取一个可用的连接，再通过连接操控db，完成操作后需要释放连接。最常用的连接池就是PoolDB，这是DBUtils包下的一个模块。
@@ -81,7 +83,7 @@ class PooledDB:
 #### 3).maxconnections机制的实现
 
 ### 2.*如何归还连接*
-最开对于连接的归还为是懵逼的，理所当然应该是`conn.close()`才对，但是PEP249规定这个是关闭连接的操作，而非归还连接。观察源码后才发现，PoolDB对连接做了一层包装对象，包装会将除了`close()`方法全部路由给实际的连接，但是对于close函数，只会把连接归还给线程池。
+最开对于连接的归我是懵逼的，虽然理所应当是`conn.close()`，但PEP249规定这个是关闭连接的操作，而非归还连接。观察源码后才发现，PoolDB对连接做了一层包装对象，包装会将除了`close()`方法全部路由给实际的连接，但是对于close函数，只会把连接归还给线程池。
 ```py
 class PooledDedicatedDBConnection:
     # 归还给连接池
@@ -169,7 +171,7 @@ execute_parallel(10)
 ```
 执行上述的代码，将会发现一个非常诡异的现象: 无论pool首先启动了多少个连接，每个线程的sql处理耗时，都会随着num的增大而线性增大。这种场景在后台面临高并发的时候将会经常遇到，上千个请求同时打到后台服务器，后台服务器无论是多线程或是协程进行db处理，都需要向pool申请连接。这主要是因为`pool.connection()`的耗时非常大，100个请求就有几百毫秒的获取请求的阻塞，并发性能怎么也上不去。分析源码后得知，pool中通过一个队列来缓存连接对象:
 * 为了保证队列的线程安全性，会申请独占锁
-* 为了保证连接的可用性，会进行ping_check(), 毫秒级耗时(大约几毫秒)。
+* 为了保证连接的可用性，会进行ping_check(), 毫秒级耗时(少则几毫秒)。
 
 这两步操作锁导致获取连接阻塞的关键因素: 一开始大量的线程建立起来，获取连接对象并被阻塞，每次只能一个线程获取一个连接, 每次获取连接都会进行几毫秒的延时，这会导致耗时的积累，并且越到后面的线程阻塞的时间就越长:
 ```py
@@ -191,7 +193,9 @@ def connection(self, shareable=True):
         self._lock.release()
     return con
 ```
-为了避免如此长时间阻塞，可以采用pools(创建多个pool)的方案, 并且初始化pool设置`ping=0`:
+阻塞的耗时主要是对连接的检查, 可以通过初始化时指定`ping=0`来避免对连接的可用性进行检查, 减少阻塞时间, 但是解决的并不彻底，一方面这不能保障连接的可用性，另一方面连接在归还给pool的时候也会上锁阻塞, 阻塞期间会进行连接的reset操作(后面将会有专门提及), 导致高并发sql操作在释放给pool也会导致较为严重的阻塞.
+
+为了解决对pool操作的串行化问题, 可以采用pools(创建多个pool)的方案, 将串行压力从一个池分摊给多个池, 如果需要初始化pool设置`ping=0`:
 ```py
 import random
 
