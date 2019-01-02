@@ -52,21 +52,48 @@ connection管理了事务和游标, 并提供了相关的接口:
 游标对象用户操控数据库上下文，从同一个连接获得的cursor并不是孤立的，若一个cursor修改了数据库，则另一个相同连接的cursor会立即看到对应的修改，这和事务无关。不同连接之间的cursor的隔离性，则由事务提供。
 * 提供的属性
     * description
-    * rowcount, 这是一个只读属性，是最后一次execute所生成或影响(SELECT/UPDATE/INSERT)的行数。如果cursor没有执行过execute或无法确定，该值为-1。
-    * lastrowid, 这个属性属于DataBase API的扩展实现，并非所有都实现了该属性。提供上次修改或新增行的rowid(主键)，若db不支持rowid或没有设置rowid则返回None，若一次性有多个行的变更，则lastrowid是未定义的。
+    * rowcount, 该属性只读，是最后一次execute所生成或影响(SELECT/UPDATE/INSERT)的行数。如果cursor没有执行过execute或无法确定，该值为-1。
+    * lastrowid, 该属性只读，属于DataBase API的扩展实现，并非所有都实现了该属性。提供上次修改或新增行的rowid(主键)，若db不支持rowid或没有设置rowid则返回None，若一次性有多个行的变更，则lastrowid是未定义的。
+    * arraysize, 该属性可读可写，指明了每次执行`cursor.fetchmany()`时返回的行数，该属性默认为1。
 * 接口方法
-    * callproc(procname [, parameters])
-    * close()
-    * execute(operation [, parameters])
+    * callproc(procname [, parameters]), 给定名称和参数，调用指定的存储过程。该方法可选，因为并非所有的db都支持存储过程，MySQL是支持的。
+    * close(), cursor关闭，当关闭后若继续使用cursor，将会抛出异常。
+    * execute(operation [, parameters]), 执行db命令，传参方式参考`creator.paramstyle`。parameters可以是一个集合，支持对db进行批量操作，但PEP249对于批量操作建议使用`executemany`
     * executemany( operation, seq_of_parameters )
-    * fetchone()
-    * fetchmany([size=cursor.arraysize])
-    * fetchall()
-    * nextset()
-    * arraysize
-    * setinputsizes(sizes)
-    * setoutputsize(size [, column])
+    * fetchone(), 获取一行的结果。
+    * fetchmany([size=cursor.arraysize]), 可以指定结果返回的行数，参数size默认为`cursor.arraysize`。PEP249建议最好使用arraysize参数，而不是在调用该函数时传入size参数，因为这样可以方便优化，但是`mysql.connector`源码中，并没有优化操作。
+    * fetchall(), 获取所有行的结果。
+    * nextset(), 使光标跳到下一个可用集。
+    * setinputsizes(sizes), 设置execute中每个参数所需要的内存大小。
+    * setoutputsize(size [, column]), 设置大列(数据可能很大的字段)的缓冲区大小。
 
+#### 1).outputsize和inputsize的实现机制
+该文主要是讨论Python中使用MySQL，而常用的MySQL库基本上都没有实现该功能, 在`mysql.connector`中定义了该两个方法为空:
+```py
+def setinputsizes(self, sizes):
+    """Not Implemented."""
+    pass
+
+def setoutputsize(self, size, column=None):
+    """Not Implemented."""
+    pass
+```
+
+#### 2).fetchmany实现机制
+在`mysql.connector`中，fetchmany就是反复调用fetchone，没有做任何优化。
+```py
+def fetchmany(self, size=None):
+    res = []
+    # 使用size参数或是arraysize属性，优先size参数。
+    cnt = (size or self.arraysize)
+    # 读取一行，直到行数达到size或arraysize，或是读取结果完毕。
+    while cnt > 0 and self._have_unread_result():
+        cnt -= 1
+        row = self.fetchone()
+        if row:
+            res.append(row)
+    return res
+```
 
 ### 5.*连接的事务*
 
@@ -101,11 +128,16 @@ class PooledDB:
             maxconnections=0,
             # 达到最大连接数，再申请连接抛出异常或阻塞
             blocking=False,
+            # 单个连接可以被重用的次数。单个连接的使用次数达到maxusage，将会使连接重置(closed and reopened)。
+            # execute和call开头的cursor方法的调用，将会递增一次usage
+            # None或0不会启动该功能。
             maxusage=None,
             setsession=None,
-            reset=True,         # 连接归还给pool时，是否进行重置
+            # 连接归还给pool时，是否进行重置
+            reset=True,
             failures=None,
-            ping=1,             # connection进行检查连接的条件
+            # connection进行检查连接的条件
+            ping=1,
             *args,
             **kwargs):
         pass
