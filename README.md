@@ -5,10 +5,76 @@
 * MySQL, 讨论MySQL本身所带来的问题.
 
 ## 一、DataBase API
-对于Python的数据库驱动API，首先需要关注和熟悉PEP(Python Enhancement Proposals)的建议，其中大部分常用的的Python-MySQL-API都会遵循[PEP249](https://legacy.python.org/dev/peps/pep-0249/)的建议，常见的数据库连接池也认为连接对象符合PEP249的规定。
-### 1.*构造函数*
+对于Python的数据库驱动API，首先需要关注和熟悉PEP(Python Enhancement Proposals)的建议，其中大部分常用的的Python-MySQL-API都会遵循[PEP249](https://legacy.python.org/dev/peps/pep-0249/)的建议，常见的数据库连接池也认为连接对象符合PEP249的规定。具体来说，PEP249定义了`数据库连接工厂(creator)`、`数据库连接(connection)`以及`数据库游标(cursor)`的接口:
+```py
+import mysql.connector
+safety = mysql.connector.threadsafety       # 数据库连接的工厂
+conn = mysql.connector(...)                 # 创造数据库连接
+cursor = conn.
+```
 
-### 2.*连接的事务*
+### 1.*creator的全局变量*
+* apilevel, 字符串常量, 表示DataBase API的级别。只允许"1.0"和"2.0"，目前常用的库都是"2.0"。
+* paramstyle, 字符串常量, 标识着sql语句的传餐格式:
+    * "qmark", `...WHERE name=?`
+    * "numeric", `...WHERE name=:1`
+    * "named", `...WHERE name=:name`
+    * "format", `...WHERE name=%s`
+    * "pyformat", `...WHERE name=%(name)s`
+* threadsafety, 表示DataBase API所支持的线程安全级别:
+    * 0, creator不能在线程间共享
+    * 1, creator可以线程共享，但connection不能线程复用
+    * 2, creator和connection都可以在线程间共享
+    * 3, creator、connection和cursor都可以在线程间共享
+
+### 2.*connection构造*
+connection对象代表client和MySQL服务器的一个TCP连接。通过以下构造函数进行创建:
+```py
+config = {
+    'host': <host>,
+    'user': <username>,
+    'password': <password>,
+    'port': <port>,
+    'database': <database-name>,
+    'charset': 'utf8'
+}
+connection = creator.connect(**config)
+```
+
+### 3.*connection接口*
+connection管理了事务和游标, 并提供了相关的接口:
+* commit(), 将事务提交到数据库。对于可以自动提交事务的database，需要将数据库关闭自动提交功能。
+* rollback(), 回滚事务，可选，因为并非所有的数据库都支持事务。
+* cursor(), 从连接获得一个新的cursor对象，若数据库没有游标的概念，则需要模块实现对游标的模拟。
+* close(), 将会关闭client和MySQL的TCP连接，若connection存在未commit的操作，则事务将会被回滚。connection关闭后，connection和该connection生成的cursor的操作都会抛出异常。
+
+### 4.*cursor接口*
+游标对象用户操控数据库上下文，从同一个连接获得的cursor并不是孤立的，若一个cursor修改了数据库，则另一个相同连接的cursor会立即看到对应的修改，这和事务无关。不同连接之间的cursor的隔离性，则由事务提供。
+* 提供的属性
+    * description
+    * rowcount, 这是一个只读属性，是最后一次execute所生成或影响(SELECT/UPDATE/INSERT)的行数。如果cursor没有执行过execute或无法确定，该值为-1。
+    * lastrowid, 这个属性属于DataBase API的扩展实现，并非所有都实现了该属性。提供上次修改或新增行的rowid(主键)，若db不支持rowid或没有设置rowid则返回None，若一次性有多个行的变更，则lastrowid是未定义的。
+* 接口方法
+    * callproc(procname [, parameters])
+    * close()
+    * execute(operation [, parameters])
+    * executemany( operation, seq_of_parameters )
+    * fetchone()
+    * fetchmany([size=cursor.arraysize])
+    * fetchall()
+    * nextset()
+    * arraysize
+    * setinputsizes(sizes)
+    * setoutputsize(size [, column])
+
+
+### 5.*连接的事务*
+
+### 6.*select的字典执行结果*
+cursor.fetch可以获取到结果中的一行数据，并且默认是以元组的形式进行保存。通常select返回的结果，以字典的形式更方便，这需要在获取游标对象的时候指定dictionary:
+```py
+cursor = connection.cursor(dictionary=True)
+```
 
 ## 二、Connection Pool
 在后台程序中通常不会直接使用数据库连接，而是使用数据库连接池(pool)，线程从pool中获取一个可用的连接，再通过连接操控db，完成操作后需要释放连接。最常用的连接池就是PoolDB，这是DBUtils包下的一个模块。
@@ -264,6 +330,8 @@ def execute_parallel(num):
 execute_parallel(10)
 ```
 ### 5.*并发连接归还的性能问题*
+```py
+```
 
 ### 6.*share机制*
 在`构造函数`一节中有对shared机制有做一个简单的介绍，该机制在MySQL中并不常用，这里详细介绍该机制的原理和目的。
@@ -378,5 +446,8 @@ def unshare(self, con):
     * SharedDBConnection, 用来提供对连接的引用计数，一般包装满足Database API的类，在DBUtils中，封装的就是SteadyDBConnection。
 
 ### 7.*DBUtils中封装了多少连接池类*
+* PooledPg.PooledDB, 提供线程间可共享的数据库连接，这个共享包含了两层含义，多个线程存取的连接来自同一个池子, 以及连接可以同时被多个线程复用(shared机制)
+* PersistentDB.PersistentDB, 提供线程专用的数据库连接，每个线程都会有个LocalThread为其提供专用连接。其实该类并不提供池化，一个线程可以获得的连接始终是同一个，不同的线程获得的连接不同。
+* SimplePooledDB.PooledDB, 比较简单的连接池，并不能提供丰富的参数，不建议使用。
 
 ### 8.*SteadyDBConnection的机理*
