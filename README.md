@@ -58,8 +58,8 @@ connection管理了事务和游标, 并提供了相关的接口:
 * 接口方法
     * callproc(procname [, parameters]), 给定名称和参数，调用指定的存储过程。该方法可选，因为并非所有的db都支持存储过程，MySQL是支持的。
     * close(), cursor关闭，当关闭后若继续使用cursor，将会抛出异常。
-    * execute(operation [, parameters]), 执行db命令，传参方式参考`creator.paramstyle`。parameters可以是一个集合，支持对db进行批量操作，但PEP249对于批量操作建议使用`executemany`
-    * executemany( operation, seq_of_parameters )
+    * execute(operation [, parameters]), 执行db命令，传参方式参考`creator.paramstyle`。parameters可以是一个集合，支持对db进行批量操作(需要传入参数multi=True，否则进行批量操作将会抛出异常)，但PEP249对于批量操作建议使用`executemany`
+    * executemany(operation, seq_of_parameters)
     * fetchone(), 获取一行的结果。
     * fetchmany([size=cursor.arraysize]), 可以指定结果返回的行数，参数size默认为`cursor.arraysize`。PEP249建议最好使用arraysize参数，而不是在调用该函数时传入size参数，因为这样可以方便优化，但是`mysql.connector`源码中，并没有优化操作。
     * fetchall(), 获取所有行的结果。
@@ -79,7 +79,9 @@ def setoutputsize(self, size, column=None):
     pass
 ```
 
-#### 2).fetchmany实现机制
+#### 2).execute和executemany的批量操作机制
+
+#### 3).fetchmany实现机制
 在`mysql.connector`中，fetchmany就是反复调用fetchone，没有做任何优化。
 ```py
 def fetchmany(self, size=None):
@@ -132,6 +134,7 @@ class PooledDB:
             # execute和call开头的cursor方法的调用，将会递增一次usage
             # None或0不会启动该功能。
             maxusage=None,
+            # setsession是sql语句的元组，每个连接创建的时候，都会预先执行一遍这批sql语句。
             setsession=None,
             # 连接归还给pool时，是否进行重置
             reset=True,
@@ -213,6 +216,31 @@ def __init__(...):
     ...
 ```
 很明显，只有当threadsafety大于1时，才会真正的使用__init__参数中的maxshared，否则maxshared为0.对于threadsafety的含义参考`DataBase API`中的描述。常用的MySQL数据库驱动库MySQLdb, mysql.connector等，该参数都是1(线程不安全，不应该被多线程共享同一个连接)，也就是说通常我们不会用到maxshared机制。
+
+#### 5).setsession机制
+该机制最开始听名字没明白，但其实非常简单，就是创建连接完成后，预先执行一批sql语句。该机制的实现，交给类`SteadyDBConnection`, 这个类用来提供稳定的连接，也是在连接池中所保存的实际对象。该类是对实际的DataBase API的第一层封装:
+```py
+class SteadyDBConnection:
+    def __init__(self, ..., setsession, ...):
+        self._setsession_sql = setsession
+
+    def _setsession(self, con=None):
+        if con is None:
+            con = self._con
+        # 如果存在setsession的sql语句，遍历执行
+        if self._setsession_sql:
+            cursor = con.cursor()
+            for sql in self._setsession_sql:
+                cursor.execute(sql)
+            cursor.close()
+
+    # 创建连接的时候，将会调用该方法
+    def _create(self):
+        ...
+        con = self._creator(*self._args, **self._kwargs)
+        self._setsession(con)
+        return con
+```
 
 ### 2.*如何归还连接*
 最开对于连接的归我是懵逼的，虽然理所应当是`conn.close()`，但PEP249规定这个是关闭连接的操作，而非归还连接。观察源码后才发现，PoolDB对连接做了一层包装对象，包装会将除了`close()`方法全部路由给实际的连接，但是对于close函数，只会把连接归还给线程池。
@@ -482,4 +510,42 @@ def unshare(self, con):
 * PersistentDB.PersistentDB, 提供线程专用的数据库连接，每个线程都会有个LocalThread为其提供专用连接。其实该类并不提供池化，一个线程可以获得的连接始终是同一个，不同的线程获得的连接不同。
 * SimplePooledDB.PooledDB, 比较简单的连接池，并不能提供丰富的参数，不建议使用。
 
-### 8.*SteadyDBConnection的机理*
+### 8.*SteadyDB的机制*
+SteadyDB用来对DataBase API的connection和cursor进行包装，确保连接的稳定可靠。SteadyDB包含了两个类:
+* SteadyDBConnection
+    * 魔法方法:
+        * `__init__(creator, maxusage, setsession, failures, ping, closeable)`
+        * `__enter__(), __exit__()`, 连接提供一个with语句的上下文，上下文的结束并不会关闭连接，但是会结束一个会话(commit或rollback)
+        * `__del__()`, 稀构函数，将会调用`_close()`来关闭连接。
+    * 公有方法:
+        * dbapi(), 返回creator。
+        * threadsafety(), 获得connection的线程安全等级。
+        * close(), 继续调用`_close()`关闭连接，但`closeable=False`时，会忽略掉关闭操作，这种情况下若事务存在，会使得连接重置。
+        * begin(), 开启一个事务。
+        * commit(), 提交事务。
+        * rollback(), 回滚事务。
+        * cancel(), 取消事务, 需要底层驱动支持该方法, `mysql.connector`是不支持该方法的。
+        * ping(), 单纯检查连接是否存活，直接返回`self._conn.ping(...)`的结果。
+        * cursor(), 获取一个SteadyDBCursor对象。
+    * 私有方法:
+        * _create(), 使用creator创建一个新的连接。
+        * _setsession(con), 创造连接时，预先执行一批sql语句。在_create时都会执行_setsession。
+        * _store(con), 保存一个连接，并且初始化相关参数。
+        * _close(), 关闭连接。
+        * _reset(), 重置连接。
+        * _ping_check(), 检查连接是否存活，若不存活会重试打开一个新的连接。
+        * _cursor(), 获取一个原生的cursor对象。
+* SteadyDBCursor
+    * 魔法方法:
+        * `__init__()`
+        * `__enter__(), __exit__()`, 提供cursor的上下文，退出上下文时，cursor将会关闭。
+        * `__getattr__(name)`, 用来获得原生cursor的属性和方法，进行调用。该函数会对原生方法进行包装，执行特殊逻辑。
+        * `__del__()`, cursor的析构函数，会调用`close()`方法。
+    * 公有方法:
+        * close()
+        * setinputsizes(sizes)
+        * setoutputsize(size, column)
+    * 私有方法:
+        * _clearsizes()
+        * _setsizes(cursor)
+        * _get_tough_method()
