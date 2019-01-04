@@ -7,7 +7,7 @@ conn = mysql.connector(...)                 # 创造数据库连接
 cursor = conn.
 ```
 
-## 1.*creator的全局变量*
+## 1.creator的全局变量
 * apilevel, 字符串常量, 表示DataBase API的级别。只允许"1.0"和"2.0"，目前常用的库都是"2.0"。
 * paramstyle, 字符串常量, 标识着sql语句的传餐格式:
     * "qmark", `...WHERE name=?`
@@ -21,7 +21,7 @@ cursor = conn.
     * 2, creator和connection都可以在线程间共享
     * 3, creator、connection和cursor都可以在线程间共享
 
-## 2.*connection构造*
+## 2.connection构造
 connection对象代表client和MySQL服务器的一个TCP连接。通过以下构造函数进行创建:
 ```py
 config = {
@@ -35,14 +35,14 @@ config = {
 connection = creator.connect(**config)
 ```
 
-## 3.*connection接口*
+## 3.connection接口
 connection管理了事务和游标, 并提供了相关的接口:
 * commit(), 将事务提交到数据库。对于可以自动提交事务的database，需要将数据库关闭自动提交功能。
 * rollback(), 回滚事务，可选，因为并非所有的数据库都支持事务。
 * cursor(), 从连接获得一个新的cursor对象，若数据库没有游标的概念，则需要模块实现对游标的模拟。
 * close(), 将会关闭client和MySQL的TCP连接，若connection存在未commit的操作，则事务将会被回滚。connection关闭后，connection和该connection生成的cursor的操作都会抛出异常。
 
-## 4.*cursor接口*
+## 4.cursor接口
 游标对象用户操控数据库上下文，从同一个连接获得的cursor并不是孤立的，若一个cursor修改了数据库，则另一个相同连接的cursor会立即看到对应的修改，这和事务无关。不同连接之间的cursor的隔离性，则由事务提供。
 * 提供的属性
     * description
@@ -61,7 +61,7 @@ connection管理了事务和游标, 并提供了相关的接口:
     * setinputsizes(sizes), 设置execute中每个参数所需要的内存大小。
     * setoutputsize(size [, column]), 设置大列(数据可能很大的字段)的缓冲区大小。
 
-### 1).outputsize和inputsize的实现机制
+### 1).*outputsize和inputsize的实现机制*
 该文主要是讨论Python中使用MySQL，而常用的MySQL库基本上都没有实现该功能, 在`mysql.connector`中定义了该两个方法为空:
 ```py
 def setinputsizes(self, sizes):
@@ -73,9 +73,9 @@ def setoutputsize(self, size, column=None):
     pass
 ```
 
-### 2).execute和executemany的批量操作机制
+### 2).*execute和executemany的批量操作机制*
 
-### 3).fetchmany实现机制
+### 3).*fetchmany实现机制*
 在`mysql.connector`中，fetchmany就是反复调用fetchone，没有做任何优化。
 ```py
 def fetchmany(self, size=None):
@@ -91,9 +91,9 @@ def fetchmany(self, size=None):
     return res
 ```
 
-## 5.*连接的事务*
+## 5.连接的事务
 
-## 6.*select的字典执行结果*
+## 6.select的字典执行结果
 cursor.fetch可以获取到结果中的一行数据，并且默认是以元组的形式进行保存。通常select返回的结果，以字典的形式更方便，这需要在获取游标对象的时候指定dictionary:
 ```py
 cursor = connection.cursor(dictionary=True)
