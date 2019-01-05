@@ -107,8 +107,6 @@ def _wait_lock(self):
         raise TooManyConnections
     self._lock.wait()
 ```
-这里需要注意一下shared机制的处理，对于share机制其实是走不到`self._wait_lock()`逻辑的，因为需要`_shared_cache`为空是必要条件，而一旦有连接被取出，该连接`必然`是在`_shared_cache`中的，因此若有`_connections`过大，则`_shared_cache`必定不为空，因此必定不满足该条件。
-
 
 ### 4).*maxshared机制*
 shared机制用来允许一个连接被多个线程复用，当非空闲连接个数达到maxshared时，将会使连接在线程间共享。在初始化时，将会根据threadsafety来计算pool可以接受的maxshared，如下代码:
@@ -478,3 +476,17 @@ SteadyDB用来对DataBase API的connection和cursor进行包装，确保连接�
 * 更强的连接检查。若连接断开，将会进行重连，重连成功同样视连接正常。
 * 更稳定的提交/回滚，在操作失败后将会重新打开连接。注意，重新打开连接仍会抛出应有的异常。
 * 更稳定的连接, 需要conn的操作，若失败了，都会重连并重试。
+
+## 9.shared机制触发maxconnection
+我曾一度认为，PooledDB的shared机制不会触发`self._wait_lock()`:
+```py
+def connection(self, shareable=True):
+    if shareable and self._maxshared:
+        self._lock.acquire()
+        try:
+            while (not self._shared_cache and self._maxconnections
+                    and self._connections >= self._maxconnections):
+                >>> self._wait_lock() <<<
+    ....
+```
+理由是通过`pool.connection()`进行申请， 若`self._connections > 0`时，必然那些连接放在了`self._shared_cache`, 进而该cache非空，不会触发wait。实际上，可能会先用`pool.connection(shareable=False)`，这时候申请的连接不会放在`self._shared_cache`中，若通过该方式申请满(_connections==maxconnections), 再进行`pool.connection(shareable=True)`，就会触发该wait。
