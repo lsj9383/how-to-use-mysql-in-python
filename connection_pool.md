@@ -274,7 +274,7 @@ def connection(self, shareable=True):
 ```
 阻塞的耗时主要是对连接的检查, 可以通过初始化时指定`ping=0`来避免对连接的可用性进行检查, 减少阻塞时间, 但是解决的并不彻底，一方面这不能保障连接的可用性，另一方面连接在归还给pool的时候也会上锁阻塞, 阻塞期间会进行连接的reset操作(后面将会有专门提及), 导致高并发sql操作在释放给pool也会导致较为严重的阻塞.
 
-为了解决对pool操作的串行化问题, 可以采用pools(创建多个pool)的方案, 将串行压力从一个池分摊给多个池, 如果需要初始化pool设置`ping=0`:
+为了解决对pool操作的串行化问题, 可以采用pools(创建多个pool)的方案, 将串行压力从一个池分摊给多个池:
 ```py
 import random
 
@@ -309,8 +309,27 @@ def execute_parallel(num):
 execute_parallel(10)
 ```
 ## 5.并发连接归还的性能问题
+上述提到了在多个线程同时像pool申请连接时，若进行了ping_check(默认配置就是每次从pool中取出connection都会进行ping_check)，会导致较高的延时。可以通过初始化时指定`ping=0`的方式，不进行ping_check，避免大量的线程阻塞，导致性能问题。其实这类问题也会伴随着另外一个问题: 大量线程同时归还连接的性能问题。归还的时候，也会对pool的队列进行上锁，然后进行归还，pooledDB有个默认的操作，归还时进行reset，reset本质上是对连接强制性回滚。直接看源码的实现:
 ```py
+def cache(self, con):
+    self._lock.acquire()
+    ...
+    if not self._maxcached or len(self._idle_cache) < self._maxcached:
+        # 归还给cache前先进行reset
+        con._reset(force=self._reset)
+        self._idle_cache.append(con)
+    ...
+    self._lock.release()
+
+def _reset(self, force=False):
+    # reset在force=True时，只要连接没关闭，就会强制性回滚
+    if not self._closed and (force or self._transaction):
+        try:
+            self.rollback()
+        except Exception:
+            pass
 ```
+这个是进行强制性回滚，需要花费几毫秒时间，因此大量线程同时对连接归还，会导致归还的阻塞时间越来越长。对于这个问题，可以在初始化时指定`reset=False`，避免其强制性回滚。无论是`ping=0`，还是`reset=False`，都牺牲了pooledDB为连接带来的健壮性。若想在保持原有健壮性的基础上使用pooledDB，那就需要使用多池方式。
 
 ## 6.share机制
 在`构造函数`一节中有对shared机制有做一个简单的介绍，该机制在MySQL中并不常用，这里详细介绍该机制的原理和目的。
