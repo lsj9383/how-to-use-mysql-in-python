@@ -96,24 +96,16 @@ PEP 249 提供的重要约束：
 
 * SimplePooledDB
     * 对于线程无法共享连接的场景（Dedicated）：
-
-![](SimplePooledDB-Dedicated.png)
-
+    ![](SimplePooledDB-Dedicated.png)
     * 对于线程共享连接的场景（Shared）：
-
-![](SimplePooledDB-Shared.png)
-
+    ![](SimplePooledDB-Shared.png)
 * PersistentDB
 ![](PersistentDB.png)
-
 * PooledDB
     * 对于线程无法共享连接的场景（Dedicated）：
-
-![](PooledDB-Dedicated.png)
-
+    ![](PooledDB-Dedicated.png)
     * 对于线程共享连接的场景（Shared）：
-
-![](PooledDB-Shared.png)
+    ![](PooledDB-Shared.png)
 
 
 ### 3.2 SimplePooledDB.PooledDB
