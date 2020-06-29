@@ -219,6 +219,8 @@ connection = SteadyDBConnection(DBAPI-2-Connection)
 其中 SteadyDBConnection 提供更稳定的数据库连接（SteadyDBConnection 的 close 方法不会真正的关闭连接）。
 
 ```py
+from DBUtils.SteadyDB import connect
+
 class PersistentDB:
     def __init__(
             self,
