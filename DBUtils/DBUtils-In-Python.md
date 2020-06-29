@@ -230,46 +230,19 @@ class PersistentDB:
             closeable=False,    # 对连接调用 close 方法时，是否进行连接的关闭。
             threadlocal=None,   # 提供线程隔离的 ThreadLocal 对象，默认时采用系统提供的 ThreadLocal 对象。
             *args, **kwargs):   # DB-API 2 创建连接的参数。
-        try:
-            threadsafety = creator.threadsafety
-        except AttributeError:
-            try:
-                if not callable(creator.connect):
-                    raise AttributeError
-            except AttributeError:
-                threadsafety = 1
-            else:
-                threadsafety = 0
-        if not threadsafety:
-            raise NotSupportedError("Database module is not thread-safe.")
-        self._creator = creator
-        self._maxusage = maxusage
-        self._setsession = setsession
-        self._failures = failures
-        self._ping = ping
-        self._closeable = closeable
+        # ...
         self._args, self._kwargs = args, kwargs
         self.thread = (threadlocal or local)()
-
-    def steady_connection(self):
-        return connect(
-            self._creator, self._maxusage, self._setsession,
-            self._failures, self._ping, self._closeable,
-            *self._args, **self._kwargs)
 
     def connection(self, shareable=False):
         try:
             con = self.thread.connection
         except AttributeError:
             con = self.steady_connection()
-            if not con.threadsafety():
-                raise NotSupportedError("Database module is not thread-safe.")
             self.thread.connection = con
+        # 检查连接
         con._ping_check()
         return con
-
-    def dedicated_connection(self):
-        return self.connection()
 ```
 
 对于构造函数的 ping 参数，取值和对应的行为：
