@@ -758,65 +758,49 @@ class SteadyDBConnection:
             self._ping_check(2)
 
         # 使用过多重置连接
-        if self._maxusage and self._usage >= self._maxusage:
-            # ...
+        try:
+            if self._maxusage and self._usage >= self._maxusage:
+                raise con._failure
 
-        return self._con.cursor(*args, **kwargs)  # try to get a cursor
+            return self._con.cursor(*args, **kwargs)  # try to get a cursor
+        except con._failures as error:
+            # 故障处理
 
 
 class SteadyDBCursor:
     def __init__(self, con, *args, **kwargs):
-        # basic initialization to make finalizer work
-        self._cursor = None
-        self._closed = True
-        # proper initialization of the cursor
-        self._con = con
-        self._args, self._kwargs = args, kwargs
-        self._clearsizes()
-        try:
-            # 会触发进行获取 cursor 时的 ping 检测以及故障处理
-            self._cursor = con._cursor(*args, **kwargs)
-        except AttributeError:
-            raise TypeError("%r is not a SteadyDBConnection." % (con,))
-        self._closed = False
+        # ...
+        # 会触发进行获取 cursor 时的 ping 检测、故障处理以及 maxusage 处理
+        self._cursor = con._cursor(*args, **kwargs)
 
      def close(self):
         """关闭游标
         """
         if not self._closed:
-            try:
-                self._cursor.close()
-            except Exception:
-                pass
+            self._cursor.close()
             self._closed = True
 
     def __del__(self):
-        try:
-            self.close()  # make sure the cursor is closed
-        except Exception:
-            pass
+        self.close()  # make sure the cursor is closed
 
     def _get_tough_method(self, name):
         """Return a "tough" version of the given cursor method."""
         def tough_method(*args, **kwargs):
             execute = name.startswith('execute')
             con = self._con
-            transaction = con._transaction
-            if not transaction:
+            if not con._transaction:
                 con._ping_check(4)
             try:
-                if con._maxusage:
-                    if con._usage >= con._maxusage:
-                        # 连接用的过多，抛出异常，并子啊故障处理中会重建连接并重新请求
-                        raise con._failure
+                if con._maxusage and con._usage >= con._maxusage:
+                    # 连接用的过多，抛出异常，并在故障处理中会重建连接并重新请求
+                    raise con._failure
+
                 if execute:
                     self._setsizes()
 
                 # 获得真正的 cursor 方法，并执行
                 method = getattr(self._cursor, name)
                 result = method(*args, **kwargs)  # try to execute
-                if execute:
-                    self._clearsizes()
             except con._failures as error:  # execution error
                 # 故障处理
             else:
@@ -837,7 +821,7 @@ class SteadyDBCursor:
             raise InvalidCursor
 ```
 
-#### 3.5.5 故障恢复
+#### 3.5.6 故障恢复
 
 故障恢复主要是处于以下场景：
 * 获取 connection。在 PooledDB 中获取连接，并进行连接检查时触发。
@@ -847,150 +831,6 @@ class SteadyDBCursor:
     * 首先检查连接，如果异常重启连接。
     * 最后执行请求，如果异常则也会重启连接。
 
-```py
-class SteadyDBConnection:
-    def commit(self):
-        """Commit any pending transaction."""
-        self._transaction = False
-        try:
-            self._con.commit()
-        except self._failures as error:  # cannot commit
-            try:  # try to reopen the connection
-                con = self._create()
-            except Exception:
-                pass
-            else:
-                self._close()
-                self._store(con)
-            raise error  # re-raise the original error
-
-    def rollback(self):
-        """Rollback pending transaction."""
-        self._transaction = False
-        try:
-            self._con.rollback()
-        except self._failures as error:  # cannot rollback
-            try:  # try to reopen the connection
-                con = self._create()
-            except Exception:
-                pass
-            else:
-                self._close()
-                self._store(con)
-            raise error  # re-raise the original error
-
-    def _cursor(self, *args, **kwargs):
-        transaction = self._transaction
-        if not transaction:
-            # 获取 cursor 时进行 ping 检测
-            self._ping_check(2)
-        try:
-            if self._maxusage:
-                if self._usage >= self._maxusage:
-                    raise self._failure
-            cursor = self._con.cursor(*args, **kwargs)  # try to get a cursor
-        except self._failures as error:  # error in getting cursor
-            # 故障处理
-        return cursor
-
-
-class SteadyDBCursor:
-    def _get_tough_method(self, name):
-        def tough_method(*args, **kwargs):
-            execute = name.startswith('execute')
-            con = self._con
-            transaction = con._transaction
-            if not transaction:
-                # 检查连接，如果连接异常则会重置
-                con._ping_check(4)
-            try:
-                # ...
-                method = getattr(self._cursor, name)
-                result = method(*args, **kwargs)  # try to execute
-            except con._failures as error:  # execution error
-                if not transaction:
-                    try:
-                        cursor2 = con._cursor(
-                            *self._args, **self._kwargs)  # open new cursor
-                    except Exception:
-                        pass
-                    else:
-                        try:  # and try one more time to execute
-                            if execute:
-                                self._setsizes(cursor2)
-                            method = getattr(cursor2, name)
-                            result = method(*args, **kwargs)
-                            if execute:
-                                self._clearsizes()
-                        except Exception:
-                            pass
-                        else:
-                            self.close()
-                            self._cursor = cursor2
-                            con._usage += 1
-                            return result
-                        try:
-                            cursor2.close()
-                        except Exception:
-                            pass
-                try:  # try to reopen the connection
-                    con2 = con._create()
-                except Exception:
-                    pass
-                else:
-                    try:
-                        cursor2 = con2.cursor(
-                            *self._args, **self._kwargs)  # open new cursor
-                    except Exception:
-                        pass
-                    else:
-                        if transaction:
-                            self.close()
-                            con._close()
-                            con._store(con2)
-                            self._cursor = cursor2
-                            raise error  # raise the original error again
-                        error2 = None
-                        try:  # try one more time to execute
-                            if execute:
-                                self._setsizes(cursor2)
-                            method2 = getattr(cursor2, name)
-                            result = method2(*args, **kwargs)
-                            if execute:
-                                self._clearsizes()
-                        except error.__class__:  # same execution error
-                            use2 = False
-                            error2 = error
-                        except Exception as error:  # other execution errors
-                            use2 = True
-                            error2 = error
-                        else:
-                            use2 = True
-                        if use2:
-                            self.close()
-                            con._close()
-                            con._store(con2)
-                            self._cursor = cursor2
-                            con._usage += 1
-                            if error2:
-                                raise error2  # raise the other error
-                            return result
-                        try:
-                            cursor2.close()
-                        except Exception:
-                            pass
-                    try:
-                        con2.close()
-                    except Exception:
-                        pass
-                if transaction:
-                    self._transaction = False
-                raise error  # re-raise the original error again
-            else:
-                con._usage += 1
-                return result
-        return tough_method
-```
 
 ## 四、MySQL Client
 在 Python 中，符合 PEP 249 规范的 MySQL Client 模块非常多，包括：
