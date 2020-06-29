@@ -458,10 +458,6 @@ class PooledDB:
         self._lock.wait()
 ```
 
-从上述描述中可以看出，`_idle_cache` 连接池中存储的是 SteadyDBConnection，并根据连接的共享方式，对 SteadyDBConnection 进行包装：
-* 连接不能共享（Dedicated），使用 `PooledDedicatedDBConnection` 进行包装。
-* 连接可以共享（Shared），使用 `PooledSharedDBConnection` 和 `SharedDBConnection` 进行包装。
-
 #### 3.4.2 Shared 机制
 
 Shared 机制拿到的连接被 PooledSharedDBConnection 和 SharedDBConnection 包装
