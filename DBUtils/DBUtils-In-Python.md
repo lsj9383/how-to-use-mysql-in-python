@@ -176,7 +176,7 @@ class PooledDBConnection:
 使用 Queue 作为连接池的队列结构，并在返回连接时用 `PooledDBConnection` 包装连接，替换 `close()` 方法。
 
 
-#### 3.2.2 Shared Connection
+#### 3.2.3 Shared Connection
 该场景下，连接池可以在线程之间共享。
 
 连接池使用 List 存放所有的连接，并在返回连接时用 `PooledDBConnection` 包装连接，替换 `close()` 方法。
