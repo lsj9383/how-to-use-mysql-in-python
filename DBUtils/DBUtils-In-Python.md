@@ -92,16 +92,25 @@ PEP 249 提供的重要约束：
 
 ### 3.1 UML 类图
 
-* SimplePooledDB
+#### 3.1.1 SimplePooledDB
+* 线程专用数据库连接
+
 ![](SimplePooledDB-Dedicated.png)
+
+* 线程共享数据库连接
 
 ![](SimplePooledDB-Shared.png)
 
-* PersistentDB
+#### 3.1.2 PersistentDB
+
 ![](PersistentDB.png)
 
-* PooledDB
+#### 3.1.3 PooledDB
+* 线程专用数据库连接
+
 ![](PooledDB-Dedicated.png)
+
+* 线程共享数据库连接
 
 ![](PooledDB-Shared.png)
 
