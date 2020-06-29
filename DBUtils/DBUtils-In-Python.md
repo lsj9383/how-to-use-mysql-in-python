@@ -355,8 +355,6 @@ Dedicated 机制拿到的连接被 PooledDedicatedDBConnection 包装，该类�
 class PooledDedicatedDBConnection:
     def __init__(self, pool, con):
         self._con = None
-        if not con.threadsafety():
-            raise NotSupportedError("Database module is not thread-safe.")
         self._pool = pool
         self._con = con
 
@@ -378,10 +376,7 @@ class PooledDedicatedDBConnection:
     def __del__(self):
         """引用丢失时，自动触发连接关闭。
         """
-        try:
-            self.close()
-        except Exception:
-            pass
+        self.close()
 ```
 
 非常明显，close 方法的调用会调用 `self._pool.cache(self._con)`，将连接归还到池中：
