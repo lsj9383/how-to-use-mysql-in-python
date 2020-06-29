@@ -1,42 +1,45 @@
 ## 一、概述
 
 ## 二、DB-API 2
-DB-API 2 就是满足 [PEP 249](https://www.python.org/dev/peps/pep-0249/) 规范的模块。PEP 249 规范描述了模块：
+DB-API 2 就是满足 [PEP 249](https://www.python.org/dev/peps/pep-0249/) 规范的数据库模块。
+
+PEP 249 规范描述了以下接口：
 * 如何生成数据库连接和游标
 * 数据库连接和游标对象的接口
-* 模块全局变量
+* 模块、数据库连接和数据库游标的相关属性
 * 其他扩展
 
+PEP 249 为 Python 应用程序访问数据库提供了统一的接口，结构如下：
 ![](PEP249.png)
 
-PEP 249 提供的重要约束：
-* 模块接口
+PEP 249 提供的相关接口：
+* DB-API 2 模块
     * 创建连接
         ```py
         cnx = connect( parameters... )
         ```
-* 模块变量
-    * apilevel, 表示 dbapi 级别：
-        * `"1.0"`，模块 DB-API 满足 PEP 248 规范。
-        * `"2.0"`，模块 DB-API 满足 PEP 249 规范。
-    * threadsafety，表示模块和相关对象的线程安全级别：
+    * 模块变量
+        * apilevel, 表示 dbapi 级别：
+            * `"1.0"`，模块 DB-API 满足 PEP 248 规范。
+            * `"2.0"`，模块 DB-API 满足 PEP 249 规范。
+        * threadsafety，表示模块和相关对象的线程安全级别：
 
-        threadsafety|Meaning
-        -|-
-        0|module（DB-API 2 模块）无法在多个线程间共享。
-        1|module 可以多线程之间共享，connection （数据库连接）不能在多个线程之间共享。
-        2|module 和 connection 都能在多个线程间共享。
-        3|module、connection 和 cursor（数据库游标）可以在多个线程间共享。
+            threadsafety|Meaning
+            -|-
+            0|module（DB-API 2 模块）无法在多个线程间共享。
+            1|module 可以多线程之间共享，connection （数据库连接）不能在多个线程之间共享。
+            2|module 和 connection 都能在多个线程间共享。
+            3|module、connection 和 cursor（数据库游标）可以在多个线程间共享。
 
-    * paramstyle，模块接口期望的参数标记(parameter marker)的格式化风格
+        * paramstyle，模块接口期望的参数标记(parameter marker)的格式化风格
 
-        paramstyle|Meaning
-        -|-
-        qmark|Question mark style, e.g. ...WHERE name=?
-        numeric|Numeric, positional style, e.g. ...WHERE name=:1
-        named|Named style, e.g. ...WHERE name=:name
-        format|ANSI C printf format codes, e.g. ...WHERE name=%s
-        pyformat|Python extended format codes, e.g. ...WHERE name=%(name)s
+            paramstyle|Meaning
+            -|-
+            qmark|Question mark style, e.g. ...WHERE name=?
+            numeric|Numeric, positional style, e.g. ...WHERE name=:1
+            named|Named style, e.g. ...WHERE name=:name
+            format|ANSI C printf format codes, e.g. ...WHERE name=%s
+            pyformat|Python extended format codes, e.g. ...WHERE name=%(name)s
 
 * Exception 结构
     ```
