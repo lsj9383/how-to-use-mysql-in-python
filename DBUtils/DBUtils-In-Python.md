@@ -529,7 +529,7 @@ class SharedDBConnection:
     def unshare(self):
         self.shared -= 1
 
-    # 其他方法用于比较连接
+    # 其他方法用于连接排序
 ```
 
 PooledSharedDBConnection 的实现：
@@ -545,10 +545,7 @@ class PooledDB:
             shared = con.shared
             if not shared:
                  # 如果连接没有被共享了，则连接已经空闲，从 shared_cache 中剔除。
-                try:
-                    self._shared_cache.remove(con)
-                except ValueError:
-                    pass
+                self._shared_cache.remove(con)
         finally:
             self._lock.release()
         if not shared:
@@ -559,8 +556,6 @@ class PooledSharedDBConnection:
     def __init__(self, pool, shared_con):
         self._con = None
         con = shared_con.con
-        if not con.threadsafety() > 1:
-            raise NotSupportedError("Database connection is not thread-safe.")
         self._pool = pool
         self._shared_con = shared_con
         self._con = con
@@ -581,10 +576,7 @@ class PooledSharedDBConnection:
             raise InvalidConnection
 
     def __del__(self):
-        try:
-            self.close()
-        except Exception:
-            pass
+        self.close()
 ```
 
 ### 3.5 SteadyDBConnection
@@ -598,13 +590,15 @@ class PooledSharedDBConnection:
 #### 3.5.1 连接初始化
 ```py
 class SteadyDBConnection:
-    """A "tough" version of DB-API 2 connections."""
-
-    version = __version__
-
     def __init__(
-            self, creator, maxusage=None, setsession=None,
-            failures=None, ping=1, closeable=True, *args, **kwargs):
+            self,
+            creator,
+            maxusage=None,              # 连接使用 maxusage 后，会进行重启
+            setsession=None,            # 每次获得连接都会先执行 setsession
+            failures=None,
+            ping=1,
+            closeable=True,             # 连接是否进行关闭（如果不关闭则会进行 reset，即回滚）
+            *args, **kwargs):           # DB-API 2 创建连接的参数
         # 参数的初始化和校验 ...
         self._args, self._kwargs = args, kwargs
         self._creator = creator.connect
@@ -614,15 +608,8 @@ class SteadyDBConnection:
         """创建一个新的连接
         """
         con = self._creator(*self._args, **self._kwargs)
-        try:
-            # 一些参数初始化和校验 ...
-            self._setsession(con)
-        except Exception as error:
-            try:
-                con.close()
-            except Exception:
-                pass
-            raise error
+        # 一些参数初始化和校验 ...
+        self._setsession(con)
         return con
 
     def _setsession(self, con=None):
@@ -641,7 +628,16 @@ class SteadyDBConnection:
         self._transaction = False
         self._closed = False
         self._usage = 0
+```
 
+#### 3.5.2 连接的关闭和重置
+
+`closable` 参数控制了连接是否进行真正的关闭：
+* 如果需要进行关闭，直接关闭连接。
+* 如果不进行关闭，连接又处于事务中，则会回滚。
+
+```py
+class SteadyDBConnection:
     def close(self):
         """关闭连接，如果连接不可关闭，则重置连接
         """
@@ -654,10 +650,7 @@ class SteadyDBConnection:
         """进行实际连接关闭的函数
         """
         if not self._closed:
-            try:
-                self._con.close()
-            except Exception:
-                pass
+            self._con.close()
             self._transaction = False
             self._closed = True
 
@@ -665,17 +658,14 @@ class SteadyDBConnection:
         """如果存在事务或强制 reset，则回滚连接
         """
         if not self._closed and (force or self._transaction):
-            try:
-                self.rollback()
-            except Exception:
-                pass
+            self.rollback()
 ```
 
-#### 3.5.2 连接 ping 检测
+#### 3.5.3 连接 ping 检测
 
-SteadyDB 进行 ping 检测要求 DB-API 2 的连接对象实现了 ping 方法，但是该方法并不属于 PEP 249 的规范，因此对于不支持 ping 方法的 DB-API 2 连接对象无法进行 ping 检测，如果要进行 ping 检测可以自行封装。
+SteadyDBConnection 进行 ping 检测要求 DB-API 2 的连接对象实现了 ping 方法，但是该方法并不属于 PEP 249 的规范，因此对于不支持 ping 方法的 DB-API 2 连接对象无法进行 ping 检测，如果要进行 ping 检测可以自行封装。
 
-ping 检测会在连接异常时，自动重新连接。
+ping 检测会在连接异常时自动重新连接。
 
 ```py
 class SteadyDBConnection:
@@ -689,39 +679,26 @@ class SteadyDBConnection:
         """检查连接，如果连接异常则重新启动连接
         """
         if ping & self._ping:
-            try:
-                alive = self._con.ping()
-            except (AttributeError, IndexError, TypeError, ValueError):
-                self._ping = 0  # ping() is not available
-                alive = None
+            alive = self._con.ping()
+            if alive is None:
+                alive = True
+            if alive:
                 reconnect = False
-            except Exception:
-                alive = False
-            else:
-                if alive is None:
-                    alive = True
-                if alive:
-                    reconnect = False
             # 如果需要进行重连且，数据库连接没有处于事务中，则重新连接
             if reconnect and not self._transaction:
-                try:  # try to reopen the connection
-                    con = self._create()
-                except Exception:
-                    pass
-                else:
-                    # 先退出之前的连接
-                    self._close()
-                    # 包装新的数据库连接
-                    self._store(con)
-                    alive = True
+                con = self._create()
+                self._close()
+                # 包装新的数据库连接
+                self._store(con)
+                alive = True
             return alive
 ```
 
-#### 3.5.3 事务机制
+#### 3.5.4 事务机制
 
-SteadyDBConnection 提供了对事务机制的包装，主要是用于决策在连接 reset，reconnect，close 时的具体行为：
+SteadyDBConnection 提供了对事务机制的包装，主要是用于决策在 reset，ping，close 时的具体行为：
 * reset，如果处于事务中，则回滚事务。
-* reconnect，如果处于事务中，则不进行 reconnect。
+* ping，如果处于事务中，则不进行 reconnect。
 * close，如果不允许关闭连接，但由处于事务中，则进行连接的 reset （回滚）。
 
 SteadyDBConnection 的事务机制，完全依赖是否调用 `SteadyDBConnection.begin()` 方法，而不管 DB-API 2 的连接到底有没有提供事务。
@@ -746,17 +723,11 @@ class SteadyDBConnection:
 
     def commit(self):
         self._transaction = False
-        try:
-            self._con.commit()
-        except self._failures as error:  # cannot commit
-            # 异常处理
+        self._con.commit()
 
     def rollback(self):
         self._transaction = False
-        try:
-            self._con.rollback()
-        except self._failures as error:  # cannot rollback
-            # 异常处理
+        self._con.rollback()
 
     def cancel(self):
         """取消事务，该方法并不属于 PEP 249 规范，对于常见的 MySQL Connection 没有实际作用。
@@ -770,7 +741,7 @@ class SteadyDBConnection:
             cancel()
 ```
 
-#### 3.5.4 游标
+#### 3.5.5 游标
 
 SteadyDBConnectino 返回的 cursor 并不是 DB-API 2 Cursor，而是对其的封装：SteadyDBCursor。
 
@@ -782,18 +753,15 @@ class SteadyDBConnection:
         return SteadyDBCursor(self, *args, **kwargs)
 
     def _cursor(self, *args, **kwargs):
-        transaction = self._transaction
-        if not transaction:
-            # 获取 cursor 时进行 ping 检测
+        # 获取 cursor 时进行 ping 检测
+        if not self._transaction:
             self._ping_check(2)
-        try:
-            if self._maxusage:
-                if self._usage >= self._maxusage:
-                    raise self._failure
-            cursor = self._con.cursor(*args, **kwargs)  # try to get a cursor
-        except self._failures as error:  # error in getting cursor
-            # 故障处理
-        return cursor
+
+        # 使用过多重置连接
+        if self._maxusage and self._usage >= self._maxusage:
+            # ...
+
+        return self._con.cursor(*args, **kwargs)  # try to get a cursor
 
 
 class SteadyDBCursor:
