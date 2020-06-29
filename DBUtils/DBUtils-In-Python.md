@@ -1,6 +1,8 @@
 ## 一、概述
 本文对 PEP 249、数据库连接池以及 MySQL 客户端驱动相关的问题进行了梳理。
 
+本文列出的源码均不是真实的源码，而是进行整理、删减后的伪代码，如此更能突出机制和原理。
+
 ## 二、DB-API 2
 DB-API 2 就是满足 [PEP 249](https://www.python.org/dev/peps/pep-0249/) 规范的数据库模块。
 
@@ -331,30 +333,12 @@ class PooledDB:
 在构建连接池的时候，就会决定采用 Dedicated 还是 Shared 机制。
 ```py
 class PooledDB:
-    def __init__(
-            self, creator, mincached=0, maxcached=0,
-            maxshared=0, maxconnections=0, blocking=False,
-            maxusage=None, setsession=None, reset=True,
-            failures=None, ping=1,
-            *args, **kwargs):
-        try:
-            threadsafety = creator.threadsafety
-        except AttributeError:
-            try:
-                if not callable(creator.connect):
-                    raise AttributeError
-            except AttributeError:
-                threadsafety = 2
-            else:
-                threadsafety = 0
-        if not threadsafety:
-            raise NotSupportedError("Database module is not thread-safe.")
-
-        # ...
+    def __init__(self, creator, maxcached=0, ...):
+        threadsafety = creator.threadsafety
 
         if threadsafety > 1 and maxshared:
             self._maxshared = maxshared
-            self._shared_cache = []  # the cache for shared connections
+            self._shared_cache = []
         else:
             self._maxshared = 0
 
