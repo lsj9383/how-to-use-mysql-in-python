@@ -1278,8 +1278,8 @@ class MySQLCursor(object):
 
 
 ## 附录、参考文献
-* [[1] PEP 0249 （DB-API 2）](https://www.python.org/dev/peps/pep-0249/)
-* [[2] PEP 0248 （DB-API 1）](https://www.python.org/dev/peps/pep-0248/)
+* [[1] PEP 0249 (DB-API 2)](https://www.python.org/dev/peps/pep-0249/)
+* [[2] PEP 0248 (DB-API 1)](https://www.python.org/dev/peps/pep-0248/)
 * [[3] DBUtils User's Guide](https://webwareforpython.github.io/DBUtils/UsersGuide.html)
 * [[4] How to Use MySQL in Python](https://github.com/lsj9383/how-to-use-mysql-in-python/blob/master/README.md)
 * [[5] MySQL Connector/Python Developer Guide](https://dev.mysql.com/doc/connector-python/en/)
