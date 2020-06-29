@@ -92,15 +92,15 @@ PEP 249 提供的重要约束：
 
 ### 3.1 UML 类图
 
-* SimplePooledDB
+#### 3.1.1 SimplePooledDB
 ![](SimplePooledDB-Dedicated.png)
 
 ![](SimplePooledDB-Shared.png)
 
-* PersistentDB
+#### 3.1.2 PersistentDB
 ![](PersistentDB.png)
 
-* PooledDB
+#### 3.1.3 PooledDB
 ![](PooledDB-Dedicated.png)
 
 ![](PooledDB-Shared.png)
