@@ -141,37 +141,7 @@ class PooledDB:
             dbapi,                 # 满足 PEP 249 的模块
             maxconnections,        # 最大连接个数
             *args, **kwargs):      # db-api 2 建立连接的参数集
-
-        try:
-            threadsafety = dbapi.threadsafety
-        except Exception:
-            threadsafety = None
-
-        if threadsafety == 0:
-            raise NotSupportedError(
-                "Database module does not support any level of threading.")
-        elif threadsafety == 1:
-            try:
-                from Queue import Queue
-            except ImportError:  # Python 3
-                from queue import Queue
-
-            self._queue = Queue(maxconnections)  # create the queue
-            self.connection = self._unthreadsafe_get_connection
-            self.addConnection = self._unthreadsafe_add_connection
-            self.returnConnection = self._unthreadsafe_return_connection
-        elif threadsafety in (2, 3):
-            from threading import Lock
-            self._lock = Lock()  # create a lock object to be used later
-            self._nextConnection = 0  # index of the next connection to be used
-            self._connections = []  # the list of connections
-            self.connection = self._threadsafe_get_connection
-            self.addConnection = self._threadsafe_add_connection
-            self.returnConnection = self._threadsafe_return_connection
-        else:
-            raise NotSupportedError(
-                "Database module threading support cannot be determined.")
-
+        # ...
         # 初始化所有的连接
         for i in range(maxconnections):
             self.addConnection(dbapi.connect(*args, **kwargs))
@@ -204,86 +174,21 @@ class PooledDBConnection:
         self.close()
 ```
 
-#### 3.2.2 threadsafety 为 1（dedicated）
-该场景下，数据库连接不能在线程间共享，只能由一个线程独占。
+#### 3.2.2 Dedicated Connection
+当连接的 threadsafety 为 1 时，自动使用专用连接，数据库连接不能在线程间共享，只能由一个线程独占。
 
-该场景下，使用 Queue 作为连接池的队列结构，并在返回连接时用 `PooledDBConnection` 包装连接，替换 `close()` 方法。
-
-```py
-class PooledDB:
-    def __init__(self,
-                 dbapi,                 # 满足 PEP 249 的模块
-                 maxconnections,        # 最大连接个数
-                 *args, **kwargs        # db-api 2 建立连接的参数集
-                ):
-        # ...
-
-        if threadsafety == 0:
-            raise NotSupportedError(
-                "Database module does not support any level of threading.")
-        elif threadsafety == 1:
-            # ...
-
-            self._queue = Queue(maxconnections)  # create the queue
-            self.connection = self._unthreadsafe_get_connection
-            self.addConnection = self._unthreadsafe_add_connection
-            self.returnConnection = self._unthreadsafe_return_connection
-        elif threadsafety in (2, 3):
-            # ...
-        else:
-            raise NotSupportedError(
-                "Database module threading support cannot be determined.")
-
-        # ...
-
-    def _unthreadsafe_get_connection(self):
-        # 包装连接
-        return PooledDBConnection(self, self._queue.get())
-
-    def _unthreadsafe_add_connection(self, con):
-        self._queue.put(con)
-
-    def _unthreadsafe_return_connection(self, con):
-        self._unthreadsafe_add_connection(con)
-
-```
+使用 Queue 作为连接池的队列结构，并在返回连接时用 `PooledDBConnection` 包装连接，替换 `close()` 方法。
 
 
 #### 3.2.2 threadsafety 为 2 或 3（shared）
-该场景下，连接池可以在线程之间共享，连接池使用 List 存放所有的连接。
+该场景下，连接池可以在线程之间共享。
+
+连接池使用 List 存放所有的连接，并在返回连接时用 `PooledDBConnection` 包装连接，替换 `close()` 方法。
+
+通过轮训 List 里面的所有连接来获取连接。
 
 ```py
 class PooledDB:
-    """A very simple database connection pool.
-
-    After you have created the connection pool,
-    you can get connections using getConnection().
-
-    """
-
-    version = __version__
-
-    def __init__(self, dbapi, maxconnections, *args, **kwargs):
-        # ...
-
-        if threadsafety == 0:
-            raise NotSupportedError(
-                "Database module does not support any level of threading.")
-        elif threadsafety == 1:
-            # ...
-        elif threadsafety in (2, 3):
-            from threading import Lock
-            self._lock = Lock()  # create a lock object to be used later
-            self._nextConnection = 0  # index of the next connection to be used
-            self._connections = []  # the list of connections
-            self.connection = self._threadsafe_get_connection
-            self.addConnection = self._threadsafe_add_connection
-            self.returnConnection = self._threadsafe_return_connection
-        else:
-            raise NotSupportedError(
-                "Database module threading support cannot be determined.")
-        # ...
-
     def _threadsafe_get_connection(self):
         self._lock.acquire()
         try:
@@ -297,9 +202,6 @@ class PooledDB:
             return con
         finally:
             self._lock.release()
-
-    def _threadsafe_add_connection(self, con):
-        self._connections.append(con)
 
     def _threadsafe_return_connection(self, con):
         # 因为连接一直都在 List 中，所以不用归还连接
