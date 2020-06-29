@@ -1,5 +1,6 @@
 ## 一、概述
 
+
 ## 二、DB-API 2
 DB-API 2 就是满足 [PEP 249](https://www.python.org/dev/peps/pep-0249/) 规范的数据库模块。
 
@@ -1186,13 +1187,87 @@ class SteadyDBCursor:
         return tough_method
 ```
 
-## 四、MySQL 驱动
+## 四、MySQL Client
+在 Python 中，符合 PEP 249 规范的 MySQL Client 模块非常多，包括：
+* MySQL-Python，在 Python2 中使用最为广泛的 MySQL Client 模块。提供 C 实现。
+* mysqlclient，是 MySQL-Python 模块的一个分支，性能非常高。
+* MySQL-Connector-Python，由 Orcale MySQL 小组官方维护，提供纯 Python 以及 C 扩展两种实现（默认使用 C 扩展）。
+* PyMySQL，纯 Python 实现。
+
+下面简单介绍 MySQL-Connector-Python 的相关特性。
 
 ### 4.1 MySQL 连接
+MySQL-Connector-Python 是一个线程不安全的连接，且每次发请求都会同步阻塞，等待服务器响应。
+
+下面是连接发起请求的伪代码：
+
+```py
+class MySQLConnection(object):
+    def cmd_query(self, query):
+        """发送 MySQL 语句，返回执行的基本信息，包括列信息，影响的行数等
+        """
+        result = self._handle_result(self._send_cmd(ServerCmd.QUERY, query))
+        return result
+
+    def _send_cmd(self, command, argument=None, ...):
+        """构造数据包并发送
+        """
+
+        # 构造请求
+        protocal_command = self._protocol.make_command(command, argument)
+
+        # 发送请求
+        self._socket.send(protocal_command, ...)
+
+        # 等待响应
+        return self._socket.recv()
+```
 
 ### 4.2 MySQL 游标
+获得数据库连接池的游标：
 
-### 4.3 其他技巧
+```py
+cursor = cnx.cursor()
+```
+
+游标实际上是一种对，MySQL 本身就有一个专门的 [CURSOR](https://www.mysqltutorial.org/mysql-cursor/) 对象，但是 MySQL-Connector-Python 对 Cursor 的实现并没有用 MySQL 本身的 CURSOR，而是直接用连接来进行的模拟。
+
+下面是通过游标执行命令，以及获取响应的`伪代码`：
+
+```py
+class MySQLCursor(object):
+    def execute(self, operation, params=None,):
+        stmt = operation
+
+        if params is not None:
+            if isinstance(params, dict):
+                stmt = _bytestr_format_dict(stmt, self._process_params_dict(params))
+            elif isinstance(params, (list, tuple)):
+                psub = _ParamSubstitutor(self._process_params(params))
+                stmt = RE_PY_PARAM.sub(psub, stmt)
+
+        self._executed = stmt
+        # _handle_result 会根据结果返回的数据构造 pep 249 规定的 description、rowcount、lastrowid 等数据
+        self._handle_result(self._connection.cmd_query(stmt))
+        return None
+
+    def fetchone(self):
+        if not self._have_unread_result():
+            return None
+        row = None
+
+        (row, eof) = self._connection.get_row()
+
+        if self._rowcount == -1:
+            self._rowcount = 1
+        else:
+            self._rowcount += 1
+
+        if eof:
+            self._handle_eof(eof)
+
+        return row
+```
 
 
 ## 附录、参考文献
@@ -1200,3 +1275,6 @@ class SteadyDBCursor:
 * [PEP 0248](https://www.python.org/dev/peps/pep-0248/)
 * [DBUtils User's Guide](https://webwareforpython.github.io/DBUtils/UsersGuide.html)
 * [How to Use MySQL in Python](https://github.com/lsj9383/how-to-use-mysql-in-python/blob/master/README.md)
+* [MySQL Connector/Python Developer Guide](https://dev.mysql.com/doc/connector-python/en/)
+* [PyMySQL Evaluation](https://wiki.openstack.org/wiki/PyMySQL_evaluation)
+* [Python MySQLdb vs mysql-connector query performance](https://charlesnagy.info/it/python/python-mysqldb-vs-mysql-connector-query-performance)
