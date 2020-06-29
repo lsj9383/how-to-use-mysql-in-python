@@ -107,9 +107,11 @@ PEP 249 提供的重要约束：
 
 #### 3.1.3 PooledDB
 * 线程专用数据库连接
+
 ![](PooledDB-Dedicated.png)
 
 * 线程共享数据库连接
+
 ![](PooledDB-Shared.png)
 
 
