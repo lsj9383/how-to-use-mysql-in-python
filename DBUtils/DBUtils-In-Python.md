@@ -171,13 +171,13 @@ class PooledDBConnection:
 ```
 
 #### 3.2.2 Dedicated Connection
-当连接的 threadsafety 为 1 时，自动使用专用连接，数据库连接不能在线程间共享，只能由一个线程独占。
+当连接的 threadsafety 为 1 时，数据库连接不能在线程间共享，只能由一个线程独占。
 
 使用 Queue 作为连接池的队列结构，并在返回连接时用 `PooledDBConnection` 包装连接，替换 `close()` 方法。
 
 
 #### 3.2.3 Shared Connection
-该场景下，连接池可以在线程之间共享。
+当连接的 threadsafety 为 2 或 3 时，连接池可以在线程之间共享。
 
 连接池使用 List 存放所有的连接，并在返回连接时用 `PooledDBConnection` 包装连接，替换 `close()` 方法。
 
