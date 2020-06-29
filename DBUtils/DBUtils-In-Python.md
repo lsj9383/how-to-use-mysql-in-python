@@ -129,8 +129,6 @@ DBUtils 为符合 DB-API 2 的模块提供了连接池化的能力，并且对�
 ### 3.2 SimplePooledDB.PooledDB
 简单的数据库连接池，支持 dedicated 和 shared 两种机制，该类只提供固定连接个数的连接池。
 
-Shared 机制是指的 DB-API 2 Connection 可以在线程之间进行共享时所采用的池化策略。
-
 生产环境通常不会使用该类，因为该池返回的 connection 无法处理连接断开等异常情况。
 
 ```py
