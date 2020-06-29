@@ -1,5 +1,5 @@
 ## 一、概述
-
+本文对 PEP 249、数据库连接池以及 MySQL 客户端驱动相关的问题进行了梳理。
 
 ## 二、DB-API 2
 DB-API 2 就是满足 [PEP 249](https://www.python.org/dev/peps/pep-0249/) 规范的数据库模块。
@@ -64,8 +64,13 @@ PEP 249 提供的相关接口：
     * `connection.cursor()`
 * cursor 对象
     * cursor 属性
-        * `cursor.description`
+        * `cursor.description`，返回 SELECT 语句执行后的列信息：
+            * 返回的是一个数组，数组中的每个元素是一个列信息，顺序按 SELECT 返回的顺序。
+            * 列信息用一个 tuple 进行表示，具体可参考 [Cursor attributes](https://www.python.org/dev/peps/pep-0249/#cursor-attributes)。
         * `cursor.rowcount`
+            * 对于 INSERT & UPDATE & DELETE 语句而言，代表影响的行数。
+            * 对于 SELECT 语句而言，代表数据集的行数。
+        * `cursor.arraysize`，fetchmany 执行时的默认 size。
     * cursor 方法
         * `cursor.callproc( procname [, parameters ] )`
         * `cursor.close()`
@@ -75,18 +80,17 @@ PEP 249 提供的相关接口：
         * `cursor.fetchmany([size=cursor.arraysize])`
         * `cursor.fetchall()`
         * `cursor.nextset()`
-        * `cursor.arraysize`
         * `cursor.setinputsizes(sizes)`
         * `cursor.setoutputsize(size [, column])`
 * 可选的扩展
-    * `cursor.rownumber`
+    * `cursor.rownumber`，当前获取数据所处的下标。
     * `cursor.connection`
-    * `cursor.scroll(value [, mode='relative' ])`
-    * `cursor.messages`
-    * `connection.messages`
+    * `cursor.scroll(value [, mode='relative' ])`，cursor 滚动到固定的偏移量进行获取数据。
+    * `cursor.messages`，记录错误和告警信息。
+    * `connection.messages`，和 `cursor.message` 类似，信息是面向连接的。
     * `cursor.next()`
     * `cursor.__iter__()`
-    * `cursor.lastrowid`
+    * `cursor.lastrowid`，最后一次修改行的rowid，通常在 INSERT 后获得自增主键的值。
 * 类型对象和构造器
 * 其他扩展
     * Exception 扩展
@@ -94,6 +98,8 @@ PEP 249 提供的相关接口：
 
 
 ## 三、DBUtils
+
+DBUtils 为符合 DB-API 2 的模块提供了连接池化的能力，并且对数据库连接提供了多层封装，提高数据库连接的可用性。
 
 ### 3.1 UML 类图
 
@@ -1192,7 +1198,7 @@ class SteadyDBCursor:
 * MySQL-Python，在 Python2 中使用最为广泛的 MySQL Client 模块。提供 C 实现。
 * mysqlclient，是 MySQL-Python 模块的一个分支，性能非常高。
 * MySQL-Connector-Python，由 Orcale MySQL 小组官方维护，提供纯 Python 以及 C 扩展两种实现（默认使用 C 扩展）。
-* PyMySQL，纯 Python 实现。
+* PyMySQL，纯 Python 实现，对 PEP 249 的实现较为完整。
 
 下面简单介绍 MySQL-Connector-Python 的相关特性。
 
@@ -1256,6 +1262,7 @@ class MySQLCursor(object):
             return None
         row = None
 
+        # 将数据从内核态转到用户态
         (row, eof) = self._connection.get_row()
 
         if self._rowcount == -1:
@@ -1271,10 +1278,10 @@ class MySQLCursor(object):
 
 
 ## 附录、参考文献
-* [PEP 0249](https://www.python.org/dev/peps/pep-0249/)
-* [PEP 0248](https://www.python.org/dev/peps/pep-0248/)
-* [DBUtils User's Guide](https://webwareforpython.github.io/DBUtils/UsersGuide.html)
-* [How to Use MySQL in Python](https://github.com/lsj9383/how-to-use-mysql-in-python/blob/master/README.md)
-* [MySQL Connector/Python Developer Guide](https://dev.mysql.com/doc/connector-python/en/)
-* [PyMySQL Evaluation](https://wiki.openstack.org/wiki/PyMySQL_evaluation)
-* [Python MySQLdb vs mysql-connector query performance](https://charlesnagy.info/it/python/python-mysqldb-vs-mysql-connector-query-performance)
+* [[1] PEP 0249 （DB-API 2）](https://www.python.org/dev/peps/pep-0249/)
+* [[2] PEP 0248 （DB-API 1）](https://www.python.org/dev/peps/pep-0248/)
+* [[3] DBUtils User's Guide](https://webwareforpython.github.io/DBUtils/UsersGuide.html)
+* [[4] How to Use MySQL in Python](https://github.com/lsj9383/how-to-use-mysql-in-python/blob/master/README.md)
+* [[5] MySQL Connector/Python Developer Guide](https://dev.mysql.com/doc/connector-python/en/)
+* [[6] PyMySQL Evaluation](https://wiki.openstack.org/wiki/PyMySQL_evaluation)
+* [[7] Python MySQLdb vs mysql-connector query performance](https://charlesnagy.info/it/python/python-mysqldb-vs-mysql-connector-query-performance)
