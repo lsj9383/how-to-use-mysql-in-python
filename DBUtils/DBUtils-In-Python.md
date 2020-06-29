@@ -234,6 +234,12 @@ class PersistentDB:
         self._args, self._kwargs = args, kwargs
         self.thread = (threadlocal or local)()
 
+    def steady_connection(self):
+        return connect(
+            self._creator, self._maxusage, self._setsession,
+            self._failures, self._ping, self._closeable,
+            *self._args, **self._kwargs)
+
     def connection(self, shareable=False):
         try:
             con = self.thread.connection
