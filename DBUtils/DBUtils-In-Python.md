@@ -460,7 +460,7 @@ class PooledDB:
 
 #### 3.4.2 Shared 机制
 
-Shared 机制拿到的连接被 PooledSharedDBConnection 和 SharedDBConnection 包装
+Shared 机制拿到的连接被包装：
 * PooledSharedDBConnection，管理对连接的释放，当引用计数为 0 的时候，将连接从 `_shared_cache` 中移出，并放置到 `_idle_cache` 中。
 * SharedDBConnection，提供对 SteadyDBConnection 连接的引用计数，以及根据引用计数进行排序的相关方法。
 
@@ -523,36 +523,13 @@ class SharedDBConnection:
         self.con = con
         self.shared = 1
 
-    def __lt__(self, other):
-        if self.con._transaction == other.con._transaction:
-            return self.shared < other.shared
-        else:
-            return not self.con._transaction
-
-    def __le__(self, other):
-        if self.con._transaction == other.con._transaction:
-            return self.shared <= other.shared
-        else:
-            return not self.con._transaction
-
-    def __eq__(self, other):
-        return (self.con._transaction == other.con._transaction
-                and self.shared == other.shared)
-
-    def __ne__(self, other):
-        return not self.__eq__(other)
-
-    def __gt__(self, other):
-        return other.__lt__(self)
-
-    def __ge__(self, other):
-        return other.__le__(self)
-
     def share(self):
         self.shared += 1
 
     def unshare(self):
         self.shared -= 1
+
+    # 其他方法用于比较连接
 ```
 
 PooledSharedDBConnection 的实现：
