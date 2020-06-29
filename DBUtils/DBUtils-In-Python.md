@@ -89,23 +89,26 @@ PEP 249 提供的重要约束：
 
 
 ## 三、DBUtils
-> DBUtils.SimplePooledDB is a very basic reference implementation of a pooled database connection.
-> You should consider it a demonstration of concept rather than something that should go into production.
 
 ### 3.1 UML 类图
 
 * SimplePooledDB
-    * 对于线程无法共享连接的场景（Dedicated）：
-    ![](SimplePooledDB-Dedicated.png)
-    * 对于线程共享连接的场景（Shared）：
-    ![](SimplePooledDB-Shared.png)
+
+对于线程无法共享连接的场景（Dedicated）：
+![](SimplePooledDB-Dedicated.png)
+
+对于线程共享连接的场景（Shared）：
+![](SimplePooledDB-Shared.png)
+
 * PersistentDB
 ![](PersistentDB.png)
+
 * PooledDB
-    * 对于线程无法共享连接的场景（Dedicated）：
-    ![](PooledDB-Dedicated.png)
-    * 对于线程共享连接的场景（Shared）：
-    ![](PooledDB-Shared.png)
+对于线程无法共享连接的场景（Dedicated）：
+![](PooledDB-Dedicated.png)
+
+对于线程共享连接的场景（Shared）：
+![](PooledDB-Shared.png)
 
 
 ### 3.2 SimplePooledDB.PooledDB
