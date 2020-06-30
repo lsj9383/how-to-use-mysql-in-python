@@ -683,12 +683,17 @@ class SteadyDBConnection:
         """检查连接，如果连接异常则重新启动连接
         """
         if ping & self._ping:
-            alive = self._con.ping()
+            try:
+                alive = self._con.ping()
+            except Exception:
+                alive = False
+
             if alive is None:
                 alive = True
             if alive:
                 reconnect = False
-            # 如果需要进行重连且，数据库连接没有处于事务中，则重新连接
+
+            # 如果需要进行重连，数据库连接没有处于事务中，则重新连接
             if reconnect and not self._transaction:
                 con = self._create()
                 self._close()
@@ -872,7 +877,25 @@ class MySQLConnection(object):
         return self._socket.recv()
 ```
 
-### 4.2 MySQL 游标
+### 4.2 连接检查
+MySQLConnection 提供的 ping 方法可以检查连接是否存在，如果连接存在异常，可以配置为重连。
+
+```py
+class MySQLConnection(object):
+    def ping(self, reconnect=False, attempts=1, delay=0):
+        try:
+            self.cmd_ping()
+        except:
+            if reconnect:
+                self.reconnect(attempts=attempts, delay=delay)
+            else:
+                raise errors.InterfaceError("Connection to MySQL is"
+                                            " not available.")
+```
+
+该命令不会返回存活标识，甚至大部分 MySQL Client 都不会返回存活标识。
+
+### 4.3 MySQL 游标
 获得数据库连接池的游标：
 
 ```py
