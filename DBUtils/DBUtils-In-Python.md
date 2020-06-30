@@ -7,10 +7,10 @@
 DB-API 2 就是满足 [PEP 249](https://www.python.org/dev/peps/pep-0249/) 规范的数据库模块。
 
 PEP 249 规范描述了以下接口：
-* 如何生成数据库连接和游标
-* 数据库连接和游标对象的接口
-* 模块、数据库连接和数据库游标的相关属性
-* 其他扩展
+* 如何生成数据库连接和游标。
+* 模块、数据库连接和数据库游标的相关接口。
+* 模块、数据库连接和数据库游标的相关属性。
+* 其他扩展。
 
 PEP 249 为 Python 应用程序访问数据库提供了统一的接口，结构如下：
 
@@ -82,8 +82,8 @@ PEP 249 提供的相关接口：
         * `cursor.fetchmany([size=cursor.arraysize])`
         * `cursor.fetchall()`
         * `cursor.nextset()`
-        * `cursor.setinputsizes(sizes)`
-        * `cursor.setoutputsize(size [, column])`
+        * `cursor.setinputsizes(sizes)`，sizes 是一个序列，指定每一个输入参数的大小。
+        * `cursor.setoutputsize(size [, column])`，设置列输出结果的大小。
 * 可选的扩展
     * `cursor.rownumber`，当前获取数据所处的下标。
     * `cursor.connection`
