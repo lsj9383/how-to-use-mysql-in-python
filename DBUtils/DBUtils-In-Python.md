@@ -594,7 +594,6 @@ class PooledSharedDBConnection:
 * 连接异常时的处理
 * setsession
 * maxusage
-* 其他
 
 #### 3.5.1 连接初始化
 ```py
