@@ -271,7 +271,7 @@ class PersistentDB:
 * 4 = 当 cursor 进行一次 query 时，进行 ping 校验。
 * 7 = 以上所有操作总是进行 ping 校验。
 
-对于 maxusage 参数，以下操作会触使用操作次数递增：
+对于 maxusage 参数，以下操作会触使操作次数递增：
 * 获得一个新的 cursor。
 * cursor 执行 execute 和 call 方法。
 
