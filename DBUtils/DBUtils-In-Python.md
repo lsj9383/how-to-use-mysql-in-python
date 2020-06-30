@@ -50,14 +50,14 @@ PEP 249 提供的相关接口：
     StandardError
     |__Warning
     |__Error
-    |__InterfaceError
-    |__DatabaseError
-        |__DataError
-        |__OperationalError
-        |__IntegrityError
-        |__InternalError
-        |__ProgrammingError
-        |__NotSupportedError
+        |__InterfaceError
+        |__DatabaseError
+            |__DataError
+            |__OperationalError
+            |__IntegrityError
+            |__InternalError
+            |__ProgrammingError
+            |__NotSupportedError
     ```
 * connection 对象
     * `connection.close()`
