@@ -906,7 +906,7 @@ class MySQLConnection(object):
 cursor = cnx.cursor()
 ```
 
-游标实际上是一种对，MySQL 本身就有一个专门的 [CURSOR](https://www.mysqltutorial.org/mysql-cursor/) 对象，但是 MySQL-Connector-Python 对 Cursor 的实现并没有用 MySQL 本身的 CURSOR，而是直接用连接来进行的模拟。
+MySQL 本身就有一个专门的 [CURSOR 对象](https://www.mysqltutorial.org/mysql-cursor/)，但是 MySQL-Connector-Python 对 Cursor 的实现并没有用 MySQL 本身的 CURSOR，而是直接用连接来进行的模拟。
 
 下面是通过游标执行命令，以及获取响应的`伪代码`：
 
