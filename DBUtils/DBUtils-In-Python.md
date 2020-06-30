@@ -592,9 +592,9 @@ class PooledSharedDBConnection:
 对 DB-API 2 Connection 进行的包装，提供了丰富的功能，包括：
 * 对连接的自动检测
 * 连接异常时的处理
-* 请求充实
-* 预置会话
+* setsession
 * maxusage
+* 其他
 
 #### 3.5.1 连接初始化
 ```py
