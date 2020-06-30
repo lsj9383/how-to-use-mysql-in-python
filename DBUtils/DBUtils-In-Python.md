@@ -70,7 +70,7 @@ PEP 249 提供的相关接口：
             * 返回的是一个数组，数组中的每个元素是一个列信息，顺序按 SELECT 返回的顺序。
             * 列信息用一个 tuple 进行表示，具体可参考 [Cursor attributes](https://www.python.org/dev/peps/pep-0249/#cursor-attributes)。
         * `cursor.rowcount`
-            * 对于 INSERT & UPDATE & DELETE 语句而言，代表影响的行数。
+            * 对于 INSERT & UPDATE & DELETE & REPLACE 等语句而言，代表影响的行数。
             * 对于 SELECT 语句而言，代表数据集的行数。
         * `cursor.arraysize`，fetchmany 执行时的默认 size。
     * cursor 方法
@@ -78,6 +78,8 @@ PEP 249 提供的相关接口：
         * `cursor.close()`
         * `cursor.execute(operation [, parameters])`
         * `cursor.executemany( operation, seq_of_parameters )`
+            * 对于 INSERT & REPLACE 等语句而言，会将语句组织成 `INSERT/REPLACE INTO table (columns)) VALUES (args1), (args2), (args3), ...` 的形式。
+            * 对于 SELECT 语句而言，意味着多次执行 execute。
         * `cursor.fetchone()`
         * `cursor.fetchmany([size=cursor.arraysize])`
         * `cursor.fetchall()`
