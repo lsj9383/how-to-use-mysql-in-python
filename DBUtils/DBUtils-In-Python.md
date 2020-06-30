@@ -849,7 +849,7 @@ class SteadyDBCursor:
 在 Python 中，符合 PEP 249 规范的 MySQL Client 模块非常多，包括：
 * MySQL-Python，在 Python2 中使用最为广泛的 MySQL Client 模块。提供 C 实现。
 * mysqlclient，是 MySQL-Python 模块的一个分支，性能非常高。
-* MySQL-Connector-Python，由 Orcale MySQL 小组官方维护，提供纯 Python 以及 C 扩展两种实现（默认使用 C 扩展）。
+* MySQL-Connector-Python，由 Oracle MySQL 小组官方维护，提供纯 Python 以及 C 扩展两种实现（默认使用 C 扩展）。
 * PyMySQL，纯 Python 实现，对 PEP 249 的实现较为完整。
 
 下面简单介绍 MySQL-Connector-Python 的相关特性。
