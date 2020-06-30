@@ -78,7 +78,7 @@ PEP 249 提供的相关接口：
         * `cursor.close()`
         * `cursor.execute(operation [, parameters])`
         * `cursor.executemany( operation, seq_of_parameters )`
-            * 对于 INSERT & REPLACE 等语句而言，会将语句组织成 `INSERT/REPLACE INTO table (columns)) VALUES (args1), (args2), (args3), ...` 的形式。
+            * 对于 INSERT & REPLACE 等语句而言，会将语句组织成 `INSERT/REPLACE INTO table (columns) VALUES (args1), (args2), (args3), ...` 的形式。
             * 对于 SELECT 语句而言，意味着多次执行 execute。
         * `cursor.fetchone()`
         * `cursor.fetchmany([size=cursor.arraysize])`
