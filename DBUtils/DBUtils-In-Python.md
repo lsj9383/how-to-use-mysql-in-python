@@ -357,7 +357,7 @@ class PooledDB:
 
 根据源码，非常明显，threadsafety 为 2 或 3 时，且 maxshared >= 1 时，才会启用 shared 机制，否则强制设置 maxshared = 0。
 
-#### 3.4.1 Dedicated 机制
+#### 3.4.2 Dedicated 机制
 
 Dedicated 机制拿到的连接被 PooledDedicatedDBConnection 包装，该类用于替换掉 close 方法，每当调用 close 方法时归还连接：
 ```py
@@ -467,7 +467,7 @@ class PooledDB:
         self._lock.wait()
 ```
 
-#### 3.4.2 Shared 机制
+#### 3.4.3 Shared 机制
 
 Shared 机制拿到的连接被包装：
 * PooledSharedDBConnection，管理对连接的释放，当引用计数为 0 的时候，将连接从 `_shared_cache` 中移出，并放置到 `_idle_cache` 中。
