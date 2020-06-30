@@ -105,7 +105,9 @@ PEP 249 提供的相关接口：
 
 ## 三、DBUtils
 
-DBUtils 为符合 DB-API 2 的模块提供了连接池化的能力，并且对数据库连接提供了多层封装，提高数据库连接的可用性。 DBUtils 为我们提供的 DB-API 2 工具有 ：
+DBUtils 为符合 DB-API 2 的模块提供了连接池化的能力，并且对数据库连接提供了多层封装，提高数据库连接的可用性。
+
+ DBUtils 为我们提供的 DB-API 2 工具有 ：
 * SimplePooledDB
 * PersistentDB
 * PooledDB
