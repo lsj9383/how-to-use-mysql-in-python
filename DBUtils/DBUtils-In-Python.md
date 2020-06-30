@@ -83,7 +83,7 @@ PEP 249 提供的相关接口：
         * `cursor.fetchone()`
         * `cursor.fetchmany([size=cursor.arraysize])`
         * `cursor.fetchall()`
-        * `cursor.nextset()`
+        * `cursor.nextset()`，在 execute 执行多次后，会存在多个结果集，该方法可以获得下一个可用的数据结果集。
         * `cursor.setinputsizes(sizes)`，sizes 是一个序列，指定每一个输入参数的大小。
         * `cursor.setoutputsize(size [, column])`，设置列输出结果的大小。
 * 可选的扩展
@@ -94,7 +94,9 @@ PEP 249 提供的相关接口：
     * `connection.messages`，和 `cursor.message` 类似，信息是面向连接的。
     * `cursor.next()`
     * `cursor.__iter__()`
-    * `cursor.lastrowid`，最后一次修改行的rowid，通常在 INSERT 后获得自增主键的值。
+    * `cursor.lastrowid`
+        * 最后一次修改行所得到的 rowid，大多数 DB 仅在 INSERT 的时候会返回 rowid。
+        * 如果最后一次操作修改了多行，该参数值的语义未定义。
 * 类型对象和构造器
 * 其他扩展
     * Exception 扩展
